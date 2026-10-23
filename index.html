@@ -85,6 +85,9 @@ footer a{color:var(--burg);cursor:pointer;text-decoration:underline}
   <h2>أكمل طلبك</h2>
   <div class="sum" id="sum"></div>
   <label>اسمك</label><input id="c_name" autocomplete="name">
+  <label>العنوان (الولاية، البلدية، الشارع)</label><textarea id="c_addr" rows="2"></textarea>
+  <button class="btn alt sm" id="c_loc" type="button" style="margin-top:8px">📍 أو أرسل موقعي على الخريطة</button>
+  <div class="sum" id="c_locst" style="margin-top:6px"></div>
   <label>ملاحظة (الكمية، المدينة...) اختياري</label><textarea id="c_note" rows="2"></textarea>
   <div class="row"><button class="btn" id="goWa">إرسال إلى واتساب</button><button class="btn alt sm" data-close>إلغاء</button></div>
 </div></div>
@@ -104,6 +107,7 @@ const SUPABASE_KEY = "sb_publishable_7eKyxPhcAwLFuF9FVyQMYA_U7D0JSxY";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const orderIds = (new URLSearchParams(location.search).get("order") || "").split(",").filter(Boolean);
 let products = [], sel = new Set(), cat = "الكل", isAdmin = false, waNumber = "213795882624";
 const LS = "oussbijeux_lastseen";
 let lastSeen = 0; try { lastSeen = +localStorage.getItem(LS) || 0; } catch (e) {}
@@ -120,6 +124,7 @@ async function load() {
   $("f_wa").value = waNumber;
   const fresh = products.filter(p => new Date(p.created_at).getTime() > lastSeen);
   if (lastSeen && fresh.length) { $("banner").style.display = "block"; $("banner").textContent = "وصل جديد: " + fresh.length + " منتجات منذ زيارتك الأخيرة"; }
+  if (orderIds.length) { $("banner").style.display = "block"; $("banner").innerHTML = 'صور الطلب · <a href="/" style="color:var(--burg)">عرض كل المنتجات</a>'; }
   render();
   try { localStorage.setItem(LS, Date.now()); } catch (e) {}
 }
@@ -127,10 +132,10 @@ async function load() {
 function render() {
   const cats = ["الكل", ...new Set(products.map(p => p.category).filter(Boolean))];
   $("chips").innerHTML = cats.map(c => `<button class="chip ${c === cat ? "on" : ""}" data-c="${esc(c)}">${esc(c)}</button>`).join("");
-  const list = products.filter(p => cat === "الكل" || p.category === cat);
+  const list = orderIds.length ? products.filter(p => orderIds.includes(p.id)) : products.filter(p => cat === "الكل" || p.category === cat);
   if (!list.length) { $("grid").innerHTML = '<div class="empty">لا توجد منتجات حاليًا، عُد قريبًا.</div>'; updateBar(); return; }
   $("grid").innerHTML = list.map(p => {
-    const isNew = lastSeen && new Date(p.created_at).getTime() > lastSeen;
+    const isNew = Date.now() - new Date(p.created_at).getTime() < 7 * 864e5;
     return `<div class="card ${sel.has(p.id) ? "sel" : ""}" data-id="${p.id}">
       <img src="${esc(p.image_url)}" alt="${esc(p.name)}" loading="lazy">
       <div class="tick">${sel.has(p.id) ? "✓" : ""}</div>
@@ -165,12 +170,28 @@ $("sendOpen").onclick = () => {
 };
 document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => document.querySelectorAll(".modal").forEach(m => m.classList.remove("show")));
 
+let locLink = "";
+$("c_loc").onclick = () => {
+  if (!navigator.geolocation) { toast("متصفحك لا يدعم تحديد الموقع"); return; }
+  $("c_locst").textContent = "جارٍ تحديد موقعك...";
+  navigator.geolocation.getCurrentPosition(
+    p => { locLink = "https://www.google.com/maps?q=" + p.coords.latitude.toFixed(6) + "," + p.coords.longitude.toFixed(6); $("c_locst").textContent = "✓ تم تحديد موقعك"; },
+    () => { $("c_locst").textContent = "تعذر تحديد الموقع، اكتب عنوانك يدويًا."; },
+    { enableHighAccuracy: true, timeout: 12000 }
+  );
+};
 $("goWa").onclick = () => {
   const name = $("c_name").value.trim();
+  const addr = $("c_addr").value.trim();
   if (!name) { toast("اكتب اسمك أولًا"); return; }
+  if (!addr && !locLink) { toast("اكتب عنوانك أو أرسل موقعك على الخريطة"); return; }
   const items = products.filter(p => sel.has(p.id));
-  let msg = "السلام عليكم، أنا " + name + ".\nأرغب في التفاوض على هذه المنتجات (بالجملة):\n\n";
-  items.forEach((p, i) => { msg += (i + 1) + ". " + p.name + (p.price ? " - " + fmt(p.price) : "") + "\n" + p.image_url + "\n"; });
+  let msg = "السلام عليكم، أنا " + name + ".\n";
+  if (addr) msg += "العنوان: " + addr + "\n";
+  if (locLink) msg += "الموقع على الخريطة: " + locLink + "\n";
+  msg += "أرغب في التفاوض على هذه المنتجات (بالجملة):\n\n";
+  items.forEach((p, i) => { msg += (i + 1) + ". " + p.name + (p.price ? " - " + fmt(p.price) : "") + "\n"; });
+  msg += "\nصور الطلب (رابط واحد):\n" + location.origin + "/?order=" + items.map(p => p.id).join(",") + "\n";
   const note = $("c_note").value.trim(); if (note) msg += "\nملاحظة: " + note;
   window.open("https://wa.me/" + waNumber + "?text=" + encodeURIComponent(msg), "_blank");
 };
