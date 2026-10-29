@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>oussbijeux | مجوهرات بالجملة</title>
+<title>Quartz Bijoux | مجوهرات بالجملة</title>
 <meta name="theme-color" content="#6B1530">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
@@ -52,13 +52,22 @@ footer a{color:var(--burg);cursor:pointer;text-decoration:underline}
 .adm.show{display:block}
 .acts{display:flex;gap:6px;padding:0 12px 12px}
 .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--burg);color:var(--cream);padding:10px 18px;border-radius:10px;z-index:20;display:none}
+header{background:#EBDFD0;padding:8px 0 0;border-bottom:0;text-align:center}
+.logo{width:min(300px,70vw);display:block;margin:0 auto}
+.info-fr{background:var(--burg);color:var(--cream);text-align:center;padding:18px 18px 20px;border-top:3px solid var(--gold);border-bottom:3px solid var(--gold);font-size:.95rem;line-height:1.7}
+.info-fr p{max-width:640px;margin:0 auto 6px}
+.info-fr .imp{color:var(--gold2);font-weight:700}
+.info-fr .btn{margin-top:8px;display:inline-block;text-decoration:none}
 </style>
 </head>
 <body>
-<header>
-  <h1>oussbijeux</h1>
-  <p>مجوهرات راقية · البيع بالجملة</p>
-</header>
+<header><img class="logo" src="logo.jpg" alt="Quartz Bijoux"></header>
+<section class="info-fr" dir="ltr" lang="fr">
+  <p>Chez <b>Quartz Bijoux</b>, la qualité est notre priorité. Nous réalisons vos modèles sur-mesure dans les meilleurs délais. Pour toute commande ou information, contactez-nous.</p>
+  <p>Nous fournissons tout modèle de Bijoux Fantaisie souhaité.</p>
+  <p class="imp">Sélection exclusive importée de Chine • Tout modèle sur demande 🇩🇿🇨🇳</p>
+  <a class="btn sm" id="contact" target="_blank" href="https://wa.me/213795882624">Contactez-nous sur WhatsApp</a>
+</section>
 
 <div class="banner" id="banner"></div>
 <div class="chips" id="chips"></div>
@@ -77,7 +86,7 @@ footer a{color:var(--burg);cursor:pointer;text-decoration:underline}
 </section>
 
 <main class="grid" id="grid"></main>
-<footer>© oussbijeux<a id="adminLink" style="display:none"></a></footer>
+<footer>© Quartz Bijoux</footer>
 
 <div class="bar" id="bar"><button class="btn" id="sendOpen"></button></div>
 
@@ -102,6 +111,7 @@ footer a{color:var(--burg);cursor:pointer;text-decoration:underline}
 <div class="toast" id="toast"></div>
 
 <script>
+const IS_ADMIN = false;
 const SUPABASE_URL = "https://zvroaaksrngquqnmlewp.supabase.co";
 const SUPABASE_KEY = "sb_publishable_7eKyxPhcAwLFuF9FVyQMYA_U7D0JSxY";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -121,7 +131,7 @@ async function load() {
   products = data;
   const { data: s } = await sb.from("settings").select("whatsapp").eq("id", 1).maybeSingle();
   if (s && s.whatsapp) waNumber = s.whatsapp;
-  $("f_wa").value = waNumber;
+  $("f_wa").value = waNumber; $("contact").href = "https://wa.me/" + waNumber;
   const fresh = products.filter(p => new Date(p.created_at).getTime() > lastSeen);
   if (lastSeen && fresh.length) { $("banner").style.display = "block"; $("banner").textContent = "وصل جديد: " + fresh.length + " منتجات منذ زيارتك الأخيرة"; }
   if (orderIds.length) { $("banner").style.display = "block"; $("banner").innerHTML = 'صور الطلب · <a href="/" style="color:var(--burg)">عرض كل المنتجات</a>'; }
@@ -158,7 +168,7 @@ $("grid").onclick = async e => {
   const st = e.target.closest("[data-stock]"), dl = e.target.closest("[data-del]");
   if (st) { const p = products.find(x => x.id === st.dataset.stock); await sb.from("products").update({ in_stock: p.in_stock === false }).eq("id", p.id); return load(); }
   if (dl) { if (!confirm("حذف هذا المنتج؟")) return; await sb.from("products").delete().eq("id", dl.dataset.del); return load(); }
-  const c = e.target.closest(".card"); if (!c) return;
+  const c = e.target.closest(".card"); if (!c || IS_ADMIN) return;
   const p = products.find(x => x.id === c.dataset.id); if (!p || p.in_stock === false) return;
   sel.has(p.id) ? sel.delete(p.id) : sel.add(p.id); render();
 };
@@ -197,11 +207,6 @@ $("goWa").onclick = () => {
 };
 
 /* ---- Admin ---- */
-function openAdminFromHash() {
-  if (location.hash === "#admin-oussbijeux" && !isAdmin) $("mLogin").classList.add("show");
-}
-window.addEventListener("hashchange", openAdminFromHash);
-setTimeout(openAdminFromHash, 600);
 $("l_go").onclick = async () => {
   const { error } = await sb.auth.signInWithPassword({ email: $("l_mail").value.trim(), password: $("l_pass").value });
   if (error) { toast("البريد أو كلمة المرور غير صحيحة"); return; }
@@ -210,7 +215,8 @@ $("l_go").onclick = async () => {
 $("f_out").onclick = async () => { await sb.auth.signOut(); checkAdmin(); };
 async function checkAdmin() {
   const { data } = await sb.auth.getSession();
-  isAdmin = !!data.session; $("adm").classList.toggle("show", isAdmin); render();
+  isAdmin = IS_ADMIN && !!data.session; $("adm").classList.toggle("show", isAdmin); render();
+  if (IS_ADMIN && !isAdmin) $("mLogin").classList.add("show");
 }
 function shrink(file, max = 1200) {
   return new Promise(res => {
@@ -251,7 +257,8 @@ $("f_wa_save").onclick = async () => {
   if (error) toast("تعذر الحفظ"); else { waNumber = n; $("f_wa").value = n; toast("تم حفظ الرقم"); }
 };
 
-checkAdmin(); load();
+if (IS_ADMIN) checkAdmin();
+load();
 </script>
 </body>
 </html>
