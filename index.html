@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quartz Bijoux | مجوهرات بالجملة</title>
 <meta name="theme-color" content="#6B1530">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
@@ -31,7 +35,7 @@ header p{margin-top:6px;font-size:.95rem;opacity:.9}
 .tick{position:absolute;top:8px;left:8px;width:30px;height:30px;border-radius:50%;background:rgba(255,251,242,.9);border:1.5px solid var(--gold);display:grid;place-items:center;color:#fff;font-weight:700}
 .card.sel .tick{background:var(--burg);border-color:var(--burg)}
 .new{position:absolute;top:8px;right:8px;background:var(--gold);color:var(--burg2);font-size:.75rem;font-weight:700;padding:3px 10px;border-radius:99px}
-.out{position:absolute;inset:0;background:rgba(250,243,230,.7);display:grid;place-items:center;font-weight:700;color:var(--burg)}
+.out{pointer-events:none;position:absolute;inset:0;background:rgba(250,243,230,.7);display:grid;place-items:center;font-weight:700;color:var(--burg)}
 .empty{text-align:center;color:var(--mut);padding:60px 20px;grid-column:1/-1}
 .bar{position:fixed;bottom:0;left:0;right:0;padding:12px 14px calc(12px + env(safe-area-inset-bottom));background:var(--burg2);border-top:2px solid var(--gold);display:none;z-index:5}
 .btn{width:100%;border:0;border-radius:10px;padding:14px;font:700 1.05rem Tajawal;background:var(--gold);color:var(--burg2);cursor:pointer}
@@ -58,6 +62,7 @@ header{background:#EBDFD0;padding:8px 0 0;border-bottom:0;text-align:center}
 .info-fr p{max-width:640px;margin:0 auto 6px}
 .info-fr .imp{color:var(--gold2);font-weight:700}
 .info-fr .btn{margin-top:8px;display:inline-block;text-decoration:none}
+.info-fr .btn.alt{color:var(--gold2);margin:8px 4px 0}
 </style>
 </head>
 <body>
@@ -66,7 +71,8 @@ header{background:#EBDFD0;padding:8px 0 0;border-bottom:0;text-align:center}
   <p>Chez <b>Quartz Bijoux</b>, la qualité est notre priorité. Nous réalisons vos modèles sur-mesure dans les meilleurs délais. Pour toute commande ou information, contactez-nous.</p>
   <p>Nous fournissons tout modèle de Bijoux Fantaisie souhaité.</p>
   <p class="imp">Sélection exclusive importée de Chine • Tout modèle sur demande 🇩🇿🇨🇳</p>
-  <a class="btn sm" id="contact" target="_blank" href="https://wa.me/213795882624">Contactez-nous sur WhatsApp</a>
+  <a class="btn sm" id="contact" target="_blank" href="https://wa.me/213795882624">Contactez-nous sur WhatsApp</a><br>
+  <button class="btn alt sm" id="installBtn">📲 ثبّت التطبيق</button><button class="btn alt sm" id="pushBtn">🔔 فعّل إشعارات الجديد</button>
 </section>
 
 <div class="banner" id="banner"></div>
@@ -167,7 +173,11 @@ $("chips").onclick = e => { const c = e.target.closest(".chip"); if (c) { cat = 
 $("grid").onclick = async e => {
   const st = e.target.closest("[data-stock]"), dl = e.target.closest("[data-del]");
   if (st) { const p = products.find(x => x.id === st.dataset.stock); await sb.from("products").update({ in_stock: p.in_stock === false }).eq("id", p.id); return load(); }
-  if (dl) { if (!confirm("حذف هذا المنتج؟")) return; await sb.from("products").delete().eq("id", dl.dataset.del); return load(); }
+  if (dl) { if (!confirm("حذف هذا المنتج؟")) return; const p0 = products.find(x => x.id === dl.dataset.del);
+    const { error: de } = await sb.from("products").delete().eq("id", dl.dataset.del);
+    if (de) { toast("تعذر الحذف"); return; }
+    try { const k = ((p0 && p0.image_url || "").split("/products/")[1] || "").split("?")[0]; if (k) await sb.storage.from("products").remove([k]); } catch (e) {}
+    return load(); }
   const c = e.target.closest(".card"); if (!c || IS_ADMIN) return;
   const p = products.find(x => x.id === c.dataset.id); if (!p || p.in_stock === false) return;
   sel.has(p.id) ? sel.delete(p.id) : sel.add(p.id); render();
@@ -247,7 +257,9 @@ $("f_add").onclick = async () => {
       const ins = await sb.from("products").insert({ name: $("f_name").value.trim() || "منتج جديد", price: $("f_price").value || null, category: $("f_cat").value.trim() || null, image_url: url });
       if (ins.error) throw ins.error;
     }
+    const nm = $("f_name").value.trim();
     toast("تم النشر"); $("f_img").value = ""; $("f_name").value = ""; load();
+    try { await sb.functions.invoke("notify", { body: { title: "Quartz Bijoux ✨ وصل جديد", body: files.length > 1 ? "وصلت " + files.length + " منتجات جديدة، تفضّل بالمشاهدة" : (nm || "منتج جديد") + " متوفر الآن" } }); } catch (e) {}
   } catch (e) { toast("فشل الرفع: " + (e.message || "خطأ")); }
   $("f_add").disabled = false; $("f_add").textContent = "نشر المنتجات";
 };
@@ -255,6 +267,29 @@ $("f_wa_save").onclick = async () => {
   let n = $("f_wa").value.replace(/\D/g, ""); if (n.startsWith("0")) n = "213" + n.slice(1);
   const { error } = await sb.from("settings").upsert({ id: 1, whatsapp: n });
   if (error) toast("تعذر الحفظ"); else { waNumber = n; $("f_wa").value = n; toast("تم حفظ الرقم"); }
+};
+
+/* ---- PWA + push ---- */
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+let deferred = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferred = e; });
+if ((matchMedia("(display-mode: standalone)").matches || navigator.standalone) && $("installBtn")) $("installBtn").style.display = "none";
+$("installBtn").onclick = () => {
+  if (deferred) { deferred.prompt(); deferred = null; return; }
+  alert(/iphone|ipad|ipod/i.test(navigator.userAgent) ? "في سفاري: اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية»." : "من قائمة المتصفح ⋮ اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».");
+};
+const urlB64 = k => { const b = (k + "=".repeat((4 - k.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/"); return Uint8Array.from([...atob(b)].map(c => c.charCodeAt(0))); };
+$("pushBtn").onclick = async () => {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) { toast("ثبّت التطبيق على الشاشة الرئيسية أولًا ثم افتحه وأعد المحاولة"); return; }
+  try {
+    if (await Notification.requestPermission() !== "granted") { toast("لم يتم السماح بالإشعارات"); return; }
+    const { data: s } = await sb.from("settings").select("vapid_public").eq("id", 1).maybeSingle();
+    if (!s || !s.vapid_public) { toast("الإشعارات غير مفعّلة بعد"); return; }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64(s.vapid_public) });
+    await sb.from("push_subs").upsert({ endpoint: sub.endpoint, sub: sub.toJSON() }, { onConflict: "endpoint", ignoreDuplicates: true });
+    toast("تم تفعيل الإشعارات ✓");
+  } catch (e) { toast("تعذر التفعيل: " + (e.message || "خطأ")); }
 };
 
 if (IS_ADMIN) checkAdmin();
